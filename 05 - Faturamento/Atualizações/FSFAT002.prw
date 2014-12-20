@@ -255,6 +255,7 @@ User Function FSFAT002()
 	aadd(aDadosCli,nMaiorDupl)
 	aadd(aDadosCli,nSldAberto)
 	aadd(aDadosCli,nPgtAtr)
+	aadd(aDadosCli,dUltCom)
 	
 	//Se for mudança de empresa volto tudo ao normal
 	if lJobEmp

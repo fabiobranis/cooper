@@ -99,21 +99,18 @@ Função que testa se o pedido pode ser aprovado, de acordo com as regras dos grup
 				lRetorno := .F.
 			EndIf
 		EndIf
-			//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-			//³Aqui e avaliado o Vencimento do Limite de Credito do Cliente            ³
-			//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+		//Aqui e avaliado o Vencimento do Limite de Credito do Cliente            ³
+		
 		If ( !Empty(SA1->A1_VENCLC) .And. SA1->A1_VENCLC < dDataBase ) .And. nVlrCred <= 0
 			cCodigo  := "04" //Vencimento do Limite de Credito
 			lRetorno := .F.
 		EndIf
 		If ( SA1->A1_RISCO <> "A" .And. !(SA1->A1_RISCO $ "E,Z" .And. nVlrCred<=0) .And. lRetorno)
-				//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-				//³Aqui e verificado o Limite de Credito do Cliente + Loja                 ³
-				//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
-				//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-				//³O Limite de Credito sempre esta na Moeda MV_MCUSTO, mas os calculos sao ³
-				//³em na moeda corrente.                                                   ³
-				//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+			
+			//Aqui e verificado o Limite de Credito do Cliente + Loja
+			//O Limite de Credito sempre esta na Moeda MV_MCUSTO, mas os calculos sao 
+			//em na moeda corrente.
 			nMCusto	 := IIf(SA1->A1_MOEDALC > 0,SA1->A1_MOEDALC,Val(SuperGetMv("MV_MCUSTO")))
 			nVlrCred := xMoeda(nVlrCred,nMoedAprv,1,dDataBase,2)
 			If SA1->A1_RISCO$"E,Z"
@@ -121,9 +118,8 @@ Função que testa se o pedido pode ser aprovado, de acordo com as regras dos grup
 			Else
 				nLimCred := xMoeda(nLimGrp,nMCusto,1,dDataBase,2) //Limite de crédito pelo grupo econômico
 			EndIf
-				//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-				//³Verifica se o Valor nao eh maior que o Limite de Credito                ³
-				//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+			
+			//Verifica se o Valor nao é maior que o Limite de Credito
 			If ( lPedido )
 				If nVlrCred < nVlrReal
 					nVlrReal += SA1->A1_SALDUP + xMoeda(SA1->A1_SALPEDL,nMCusto,1,dDatabase,2)
@@ -142,10 +138,9 @@ Função que testa se o pedido pode ser aprovado, de acordo com as regras dos grup
 				cCodigo  := "01" // Limite de Credito
 				lRetorno := .F.
 			EndIf
-				//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-				//³Controle de limite de credito secundario                                ³
-				//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
-			If SA1->A1_RISCO $ "E,Z"
+			
+			//Controle de limite de credito secundario - Verificar se será usado com o Leandro
+/*			If SA1->A1_RISCO $ "E,Z"
 				nLimCredFin	:= xMoeda(SA1->A1_LCFIN,nMCusto,1,dDataBase,MsDecimais(1))
 			Else
 				nLimCredFin := 0
@@ -159,69 +154,7 @@ Função que testa se o pedido pode ser aprovado, de acordo com as regras dos grup
 			If SA1->A1_SALFIN > nLimCredFin .And. SA1->A1_LCFIN > 0
 				cCodigo 	:= "01" // Limite de Credito
 				lRetorno := .F.
-			EndIf
-				//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-				//³Verifica as Classes de Cliente                                          ³
-				//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
-			If nVlrReal > 0
-				Do Case
-				Case ( nVlrReal <= nLiMinCr )
-					lRetorno := .T.
-					cCodigo  := ""
-				Case ( nVlrReal > ((nPerMax * nLimCred) / 100) )
-					lRetorno := .F.
-					cCodigo  := "01" // Limite de Credito
-				Case ( SA1->A1_CLASSE == "A" .And. nVlrPed > nfaixaA .And. nFaixaA <> 0 )
-					lRetorno := .F.
-					cCodigo  := "01" // Limite de Credito
-				Case ( SA1->A1_CLASSE == "B" .And. nVlrPed > nfaixaB .And. nFaixaB <> 0 )
-					lRetorno := .F.
-					cCodigo  := "01" // Limite de Credito
-				Case ( SA1->A1_CLASSE == "C" .And. nVlrPed > nfaixaC .And. nFaixaC <> 0 )
-					lRetorno := .F.
-					cCodigo  := "01" // Limite de Credito
-				EndCase
-					//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
-					//³Aqui e verificado o Grau de Risco do Cliente + Loja                     ³
-					//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
-				If ( lRetorno .And. !Empty(SA1->A1_RISCO) .And. !SA1->A1_RISCO$"E,Z")
-					nNumDias := SuperGetMv("MV_RISCO"+SA1->A1_RISCO)
-					dbSelectArea("SE1")
-					dbSetOrder(8)
-				
-					lQuery    := .T.
-					cAliasSE1 := "MAAVALCRED"
-
-					cQuery    := "SELECT MIN(E1_VENCREA) VENCREAL "
-					cQuery    += "FROM "+RetSqlName("SE1")+" SE1 "
-					cQuery    += "WHERE SE1.E1_FILIAL='"+xFilial("SE1")+"' AND "
-					cQuery    += "SE1.E1_CLIENTE='"+cCodClGrp+"' AND "
-					cQuery    += "SE1.E1_LOJA='"+cLjGrp+"' AND "
-					cQuery    += "SE1.E1_STATUS='A' AND "
-					cQuery    += "SE1.E1_TIPO NOT IN " + FormatIn(MVABATIM,"|") + " AND "
-					cQuery    += "SE1.E1_TIPO NOT IN " + FormatIn(MV_CRNEG,cSepNeg)  + " AND "
-					cQuery    += "SE1.E1_TIPO NOT IN " + FormatIn(MVPROVIS,cSepProv) + " AND "
-					cQuery    += "SE1.E1_TIPO NOT IN " + FormatIn(MVRECANT,cSepRec)  + " AND "
-					cQuery    += "SE1.D_E_L_E_T_=' ' "
-
-
-					cQuery := ChangeQuery(cQuery)
-
-					dbUseArea(.T.,"TOPCONN",TcGenQry(,,cQuery),cAliasSE1,.T.,.T.)
-
-					TcSetField(cAliasSE1,"VENCREAL","D",8,0)
-							
-					If (cAliasSE1)->(!Eof()) .And. !Empty((cAliasSE1)->VENCREAL) .And. (dDataBase - (cAliasSE1)->VENCREAL) >= nNumDias
-						lRetorno := .F.
-						cCodigo  := "01" // Limite de Credito
-					EndIf
-
-					dbSelectArea(cAliasSE1)
-					dbCloseArea()
-					dbSelectArea("SE1")
-							
-				EndIf
-			EndIf
+			EndIf*/
 		EndIf
 	EndIf
 	
