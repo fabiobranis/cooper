@@ -26,7 +26,7 @@ Função que faz a interface e persiste os dados das empresas no cadastro de clien
 /*/	
 	//Variáveis do processo de faturamento
 	Local dPrimCompr	:= ctod("") //Primeira compra
-	Local dUltCompr		:= dDatabase //	Última Compra
+	Local dUltCompr		:= ctod("") //	Última Compra
 	Local cUltEmpCpr	:= iif(SM0->M0_CODIGO == "20","COOPER","HORIZON") //Última empresa que foi feita a compra
 	Local nMaiCompr		:= 0 //Maior compra
 	Local nNumComprs	:= 0 //Número de compras do cliente
@@ -43,30 +43,34 @@ Função que faz a interface e persiste os dados das empresas no cadastro de clien
 	
 	Local aDadoAtual	:= {} //Array que receberá o retorno do processamento da empresa logada - Dados do cliente
 	Local aDadoOutr		:= {}//Array que receberá o retorno do processamento da outra empresa não logada - Dados do cliente
+	Local cCodCliCh 	:= ""
+	Local cLojCliCh 	:= ""
 	
 	SA1->(dbsetorder(1))
 	if SA1->(dbseek(xFilial("SA1")+SC5->C5_CLIENTE+SC5->C5_LOJACLI))
 		
-		cCnpjCli := SA1->A1_CGC//Recupero o cnpj
+		cCodCliCh := SA1->A1_COD
+		cLojCliCh := SA1->A1_LOJA
 		
 		//Parâmetros para a empresa logada
-		aPar := {"","",cCnpjCli}
+		aPar := {"","",cCodCliCh,cLojCliCh}
 		aDadoAtual := ExecBlock ("FSFAT002",.F.,.F.,aPar)//Recupero os dados da Empresa logada
 		
 		//Parâmetros para a outra empresa 
-		aPar := {cCodEmpPr,"01",cCnpjCli}
+		aPar := {cCodEmpPr,"01",cCodCliCh,cLojCliCh}
 		aDadoOutr := ExecBlock ("FSFAT002",.F.,.F.,aPar) //Recupero os dados da outra empresa
 		
 		
 		//Ajusto os valores de cadastro de cliente
 		dPrimCompr 	:= retPrimCpr(aDadoAtual[1],aDadoOutr[1])//Verifico qual a menor data
+		dUltCompr 	:= retUltCpr(aDadoAtual[14],aDadoOutr[14])//última compra
 		nMaiCompr 	:= iif(aDadoAtual[2] > aDadoOutr[2],aDadoAtual[2],aDadoOutr[2])//Verifico a maior compra
 		nNumComprs 	:= aDadoAtual[3]+aDadoOutr[3] //Somo o número de compras
 		nVacumPed 	:= aDadoAtual[4]+aDadoOutr[4]//Somo os valores acumulados
 	
 	
 		//Gravo os dados na tabela SA1
-		if reckLock("SA1",.F.)
+		if recLock("SA1",.F.)
 			//Relativo ao processo de faturamento
 			SA1->A1_PRICOM 	:= dPrimCompr
 			SA1->A1_ULTCOM 	:= dUltCompr
@@ -110,6 +114,36 @@ Foi concebida pois deve ser testada se as datas estão preenchidas
 				dDatRet := dData1
 			else
 				dDatRet := iif(dData1 < dData2,dData1,dData2)//Se as duas datas estão preenchidas, então eu testo
+			endif
+		endif
+	endif
+	
+return dDatRet
+
+Static Function retUltCpr(dData1,dData2)
+/*/{Protheus.doc} retUltCpr
+Função que retorna a pultima data de compra.
+Foi concebida pois deve ser testada se as datas estão preenchidas
+@author Fabio
+@since 17/12/2014
+@version 1.0
+@param dData1, data, Primeira data
+@param dData2, data, Segunda data
+@return dDatRet, Menor data de compra
+/*/
+	Local dDatRet	:= ctod("")
+	
+	//Se nenhuma data está preenchida é porque não houve compra compra
+	if empty(dData1) .and. empty(dData2)
+		dDatRet := ctod("")
+	else
+		if empty(dData1)
+			dDatRet := dData2
+		else
+			if empty(dData2)
+				dDatRet := dData1
+			else
+				dDatRet := iif(dData1 > dData2,dData1,dData2)//Se as duas datas estão preenchidas, então eu testo
 			endif
 		endif
 	endif

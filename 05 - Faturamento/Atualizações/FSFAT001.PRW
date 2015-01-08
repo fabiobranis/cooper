@@ -139,6 +139,7 @@ Static Function fGGRP(nTipo)
 		Replace SZ0->Z0_Filial  With  xFilial("SZ5"),;
 				SZ0->Z0_CODIGO	With  M->Z0_CODIGO,;
 				SZ0->Z0_NOME	With  M->Z0_NOME,;
+				Z0_VALIDAD		With  M->Z0_VALIDAD,;	
 				SZ0->Z0_VALOR	With  M->Z0_VALOR
 		MsUnLock()
 	ElseIf (nTipo==5)
@@ -236,7 +237,7 @@ User Function fValVR(nTipo)
 							lOKCLI:= .F.
 						EndIf
 					EndIf
-					nTot2+= aCols[N][nPosVR]
+					nTot2+= aCols[nInd][nPosVR]
 				EndIf
 			Next nInd
 		EndIf

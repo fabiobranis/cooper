@@ -46,23 +46,26 @@ Função que faz a interface e persiste os dados das empresas no cadastro de clien
 	
 	Local aDadoAtual	:= {} //Array que receberá o retorno do processamento da empresa logada - Dados do cliente
 	Local aDadoOutr		:= {}//Array que receberá o retorno do processamento da outra empresa não logada - Dados do cliente
-	
+	Local cCodCliCh 	:= ""
+	Local cLojCliCh 	:= ""
+		
 	SA1->(dbsetorder(1))
 	if SA1->(dbseek(xFilial("SA1")+SC5->C5_CLIENTE+SC5->C5_LOJACLI))
 		
-		cCnpjCli := SA1->A1_CGC//Recupero o cnpj
+		cCodCliCh := SA1->A1_COD
+		cLojCliCh := SA1->A1_LOJA
 		
 		//Parâmetros para a empresa logada
-		aPar := {"","",cCnpjCli}
+		aPar := {"","",cCodCliCh,cLojCliCh}
 		aDadoAtual := ExecBlock ("FSFAT002",.F.,.F.,aPar)//Recupero os dados da Empresa logada
 		
 		//Parâmetros para a outra empresa 
-		aPar := {cCodEmpPr,"01",cCnpjCli}
+		aPar := {cCodEmpPr,"01",cCodCliCh,cLojCliCh}
 		aDadoOutr := ExecBlock ("FSFAT002",.F.,.F.,aPar) //Recupero os dados da outra empresa
 		
 		//Ajusto os valores do financeiro - Também é cadastro mas conceitualmente separado
-		nMsaldCli	:= aDadoAtual[5]+aDadoOutr[5]//Somo o valor - O maior saldo devedor é a soma do maior das duas empresas
-		nMedAtrCl	:= (aDadoAtual[6]+aDadoOutr[6])/2//Somo e divido por 2 para obter a média das duas empresas
+		nMsaldCli	:= iif(SA1->A1_MSALDO > aDadoAtual[5]+aDadoOutr[5],SA1->A1_MSALDO,aDadoAtual[5]+aDadoOutr[5])//Comparo a soma com o que está gravado pra pegar o maior
+		nMedAtrCl	:= retMedAtr(aDadoAtual[6],aDadoOutr[6])//(aDadoAtual[6]+aDadoOutr[6])/2//Somo e divido por 2 para obter a média das duas empresas
 	 	nSldTitCl	:= aDadoAtual[7]+aDadoOutr[7]//O saldo em aberto é a soma dos dois 
 	 	nNroPgCli	:= aDadoAtual[8]+aDadoOutr[8]//O número de pagamentos é a soma das duas empresas
 		nVlAtrCli	:= aDadoAtual[9]+aDadoOutr[9]//Valor em atraso é a soma das duas empresas 
@@ -72,7 +75,7 @@ Função que faz a interface e persiste os dados das empresas no cadastro de clien
 		nNroPgAt	:= aDadoAtual[13]+aDadoOutr[13]//Somo o valor dos pagamentos em atraso
 	
 		//Gravo os dados na tabela SA1
-		if reckLock("SA1",.F.)
+		if recLock("SA1",.F.)
 			
 			//Relativo ao financeiro
 			SA1->A1_MSALDO 	:= nMsaldCli
@@ -95,3 +98,26 @@ Função que faz a interface e persiste os dados das empresas no cadastro de clien
 	restArea(aArea)
 	
 return
+
+Static Function retMedAtr(nMed1,nMed2)
+/*/{Protheus.doc} retMedAtr
+Retorna a média de atraso de pagamentos com base no cálculo das duas empresas
+@author Fabio Branis
+@since 21/12/2014
+@version 1.0
+@param nMed1, float, Média da empresa 1
+@param nMed2, float, Média da empresa 2
+@return nRet, Média Calculada
+/*/
+	Local nRet	:= 0
+	
+	do case
+	case nMed1 <> 0 .and. nMed2 <> 0
+		nRet := (nMed1 + nMed2) / 2
+	case nMed1 <> 0 .and. nMed2 == 0
+		nRet := nMed1
+	case nMed1 == 0 .and. nMed2 <> 0
+		nRet := nMed2
+	endcase
+	
+return nRet

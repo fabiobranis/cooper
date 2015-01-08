@@ -6,7 +6,8 @@ Programa que retorna os indicadores atualizados do cliente.
 @version 1.0
 @param paramixb[1], String, Empresa que vai ser processada
 @param paramixb[2], String, Filial que vai ser processada
-@param paramixb[3], String, Cnpj do cliente
+@param paramixb[3], String, Código do cliente
+@param paramixb[4], String, Loja do Cliente
 @return aDadosCli, Array contendo os dados do cliente
 /*/
 User Function FSFAT002()
@@ -40,21 +41,24 @@ User Function FSFAT002()
 	Local nMedAtr		:= 0
 	Local nSldAberto	:= 0
 	
-	Local cCnpjCli		:= paramixb[3]
+	Local cCodCli		:= paramixb[3]
+	Local cLojCli		:= paramixb[4]
 	Local lJobEmp		:= iif(empty(paramixb[1]),.F.,.T.)
 	Local cNumEmp		:= paramixb[1]
 	Local cNumFil		:= paramixb[2]
 	Local cEmprBkp		:= SM0->M0_CODIGO
-	Local cAliSA1		:= iif(lJobEmp,"SA1AUX","SA1")//Já que o empchangetable não funciona, fazemos funcionar de alguma forma
+	Local cAliSA1		:= "SA1"//SA1 é a mesma para ambas as empresas
 	
 	//Verificos se é para trocar de empresa
 	if lJobEmp
-
-     	dbUseArea(.T., "TOPCONN", "SA1"+alltrim(cNumEmp)+"0",cAliSA1,.T.,.F.)//Abro a SA1 separado, pois a função de mudança não funcionou pra ela
-     	//Defino os três primeiros índices para a tabela SA1
-     	dbsetindex("SA1"+alltrim(cNumEmp)+"01")
-     	dbsetindex("SA1"+alltrim(cNumEmp)+"02")
-     	dbsetindex("SA1"+alltrim(cNumEmp)+"03") 
+//		if select(cAliSA1) <> 0
+//			(cAliSA1)->(dbclosearea(cAliSA1))		
+//		endif
+//     	dbUseArea(.T., "TOPCONN", "SA1"+alltrim(cNumEmp)+"0",cAliSA1,.T.,.F.)//Abro a SA1 separado, pois a função de mudança não funcionou pra ela
+//     	//Defino os três primeiros índices para a tabela SA1
+//     	dbsetindex("SA1"+alltrim(cNumEmp)+"01")
+//     	dbsetindex("SA1"+alltrim(cNumEmp)+"02")
+//     	dbsetindex("SA1"+alltrim(cNumEmp)+"03") 
      	
      	//Abro a tabela referente à outra empresa
      	EmpChangeTable("SE1",cNumEmp,cEmprBkp,2 ) 
@@ -67,8 +71,8 @@ User Function FSFAT002()
 	//Posiciono no cliente tanto a tabela SA1 quanto SE1
 	dbSelectArea("SE1")
 	dbSetOrder(2)
-	(cAliSA1)->(dbsetorder(3))
-	if (cAliSA1)->(dbseek(xFilial("SA1")+cCnpjCli))
+	(cAliSA1)->(dbsetorder(1))
+	if (cAliSA1)->(dbseek(xFilial("SA1")+cCodCli+cLojCli))
 		cCliCod	:= (cAliSA1)->A1_COD
 		cLojCod	:= (cAliSA1)->A1_LOJA
 		MsSeek(xFilial("SE1")+(cAliSA1)->A1_COD+(cAliSA1)->A1_LOJA,.T.)
@@ -98,7 +102,7 @@ User Function FSFAT002()
 			//			
 			cChaveSe1 := cFilBusca + SE1->E1_CLIENTE+ SE1->E1_LOJA
 							
-			dbSelectArea( "SA1" )
+			dbSelectArea(cAliSA1)
 			If (dbSeek( cChaveSe1 ) )
 				If !((cAliSA1)->(A1_FILIAL+A1_COD+A1_LOJA) ==  cCliente)
 					cCliente     := (cAliSA1)->(A1_FILIAL+A1_COD+A1_LOJA)
@@ -109,12 +113,12 @@ User Function FSFAT002()
 				nMoedaF		:= If((cAliSA1)->A1_MOEDALC > 0,(cAliSA1)->A1_MOEDALC,nMoeda)
 				nTaxaM:=Round(SE1->E1_VLCRUZ/SE1->E1_VALOR,3)
 				If SE1->E1_TIPO $ MVRECANT+"/"+MV_CRNEG+"/"+MVABATIM+"/"+MVIRABT+"/"+MVFUABT+"/"+MVINABT+"/"+MVISABT+"/"+MVPIABT+"/"+MVCFABT
-					AtuSalDup("-",SE1->E1_SALDO,SE1->E1_MOEDA,SE1->E1_TIPO,Iif(nTaxaM==1,Nil,nTaxaM),SE1->E1_EMISSAO)
+					//AtuSalDup("-",SE1->E1_SALDO,SE1->E1_MOEDA,SE1->E1_TIPO,Iif(nTaxaM==1,Nil,nTaxaM),SE1->E1_EMISSAO)
 				Else
 					nSaldoTit := SE1->E1_SALDO
 					nSaldoTit := Iif(nSaldoTit < 0, 0, nSaldoTit)
 					IF !(SE1->E1_TIPO $ MVPROVIS)
-						AtuSalDup("+",nSaldoTit,SE1->E1_MOEDA,SE1->E1_TIPO,Iif(nTaxaM==1,Nil,nTaxaM),SE1->E1_EMISSAO)
+						//AtuSalDup("+",nSaldoTit,SE1->E1_MOEDA,SE1->E1_TIPO,Iif(nTaxaM==1,Nil,nTaxaM),SE1->E1_EMISSAO)
 					Endif
 					
 					//Primeira compra
@@ -124,7 +128,7 @@ User Function FSFAT002()
 					
 					//Valor acumulado dos pedidos
 					IF Year(SE1->E1_EMISSAO) == Year(dDataBase) .And. AllTrim(Upper(SE1->E1_ORIGEM))<>"FINA280"
-						nVacumPed += xMoeda(SE1->E1_VALOR,SE1->E1_MOEDA,nMoedaF,SE1->E1_EMISSAO)
+						nVacumPed += xMoeda(SE1->E1_VALOR,nMoeda,nMoedaF,SE1->E1_EMISSAO)
 					Endif
 	
 					IF !(SE1->E1_TIPO $ MVPROVIS)
@@ -137,16 +141,16 @@ User Function FSFAT002()
 								SF2->( MsSeek(cFilSF2+SE1->(E1_CLIENTE+E1_LOJA+E1_NUM+E1_SERIE)))
 							Endif
 							If SF2->(!EoF())
-								nMaiorVDAaux := xMoeda(SF2->F2_VALFAT,SE1->E1_MOEDA,nMoedaF,SE1->E1_EMISSAO)
+								nMaiorVDAaux := xMoeda(SF2->F2_VALFAT,nMoeda,nMoedaF,SE1->E1_EMISSAO)
 								If nMaiorVDA < nMaiorVDAaux
 									nMaiorVDA := nMaiorVDAaux
 								Endif
 							Endif
 						Else
-							nMaiorVDA := xMoeda(SE1->E1_VALOR,SE1->E1_MOEDA,nMoedaF,SE1->E1_EMISSAO) //Maior venda
+							nMaiorVDA := xMoeda(SE1->E1_VALOR,nMoeda,nMoedaF,SE1->E1_EMISSAO) //Maior venda
 						Endif
 						    
-						nValForte := xMoeda(SE1->E1_VALOR,SE1->E1_MOEDA,nMoedaF,SE1->E1_EMISSAO)
+						nValForte := xMoeda(SE1->E1_VALOR,nMoeda,nMoedaF,SE1->E1_EMISSAO)
 						//Maior duplicata
 						if nValForte > (cAliSA1)->A1_MAIDUPL //refaz dados historicos
 							nMaiorDupl := nValForte
@@ -186,9 +190,9 @@ User Function FSFAT002()
 						//A1_MATR - Maior atraso do Cliente
 	  					
 	  					//Maior compra			  							
-						If nMaiorVDA < (cAliSA1)->A1_MCOMPRA
-							nMaiorVDA := (cAliSA1)->A1_MCOMPRA
-						Endif
+//						If nMaiorVDA < (cAliSA1)->A1_MCOMPRA
+//							nMaiorVDA := (cAliSA1)->A1_MCOMPRA
+//						Endif
 	  						 		  						 	
 							// Nao incrementa faturas a receber (FINA280)
 						If AllTrim(Upper(SE1->E1_ORIGEM)) <> "FINA280"
@@ -204,17 +208,8 @@ User Function FSFAT002()
 						EndIf
 
 						If SE1->E1_SALDO > 0
-							nMSaldo += xMoeda(SE1->E1_SALDO,SE1->E1_MOEDA,nMoedaF,SE1->E1_EMISSAO) //Maior Saldo
-							nSldAberto += xMoeda(SE1->E1_SALDO,SE1->E1_MOEDA,nMoedaF,SE1->E1_EMISSAO)//Saldo em aberto
-						EndIf
-						
-						//Maior saldo devedor
-						If (cAliSA1)->A1_SALDUPM > (cAliSA1)->A1_MSALDO
-							nMSaldo := (cAliSA1)->A1_SALDUPM
-						Else
-							If nMSaldo < (cAliSA1)->A1_MSALDO
-								nMSaldo := (cAliSA1)->A1_MSALDO
-							EndIf
+							nMSaldo += xMoeda(SE1->E1_SALDO,nMoeda,nMoedaF,SE1->E1_EMISSAO) //Maior Saldo
+							nSldAberto += xMoeda(SE1->E1_SALDO,nMoeda,nMoedaF,SE1->E1_EMISSAO)//Saldo em aberto
 						EndIf
 								
 						IF Empty(SE1->E1_FATURA) .Or. Substr(SE1->E1_FATURA,1,6) = "NOTFAT"
@@ -240,7 +235,7 @@ User Function FSFAT002()
 		dbSelectArea( "SE1" )
 		dbSkip()
 	Enddo
-	
+
 	//Alimento o array de retorno
 	aadd(aDadosCli,dPricom)
 	aadd(aDadosCli,nMaiorVDA)
@@ -260,7 +255,9 @@ User Function FSFAT002()
 	//Se for mudança de empresa volto tudo ao normal
 	if lJobEmp
 		
-		dbclosearea(cAliSA1)//Fecho a tabela
+//		if select(cAliSA1) <> 0
+//			(cAliSA1)->(dbclosearea(cAliSA1))
+//		endif
 		//Volto ao estado original
      	EmpChangeTable("SE1",cEmprBkp,cNumEmp,2 ) 
      	EmpChangeTable("SF2",cEmprBkp,cNumEmp,2 ) 

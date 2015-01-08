@@ -15,7 +15,7 @@ User Function FSFAT004()
 	//Autoloader
 	while lProc
 		ajustaSx1(cPerg)
-		lProc := indexRot(cPerg) //indexRot é o root da aplicação - Controler principal
+		Processa({||lProc := indexRot(cPerg)},"[FSFAT004] - Aguarde","Processando...") //indexRot é o root da aplicação - Controler principal
 	enddo
 	
 Return
@@ -33,9 +33,10 @@ Controller principal da função.
 	Local aDadoAtual	:= {} //Dados da primeira emrpesa a ser processada
 	Local aDadoOutr		:= {} //Dados da segunda empresa a ser processada
 	Local aPar			:= {} //Parâmetros para o execblock
-	Local cCnpjCli		:= ""
-	Local cCodEmpPr		:= iif(SM0->M0_CODIGO == "20","30","20")//Empresa não logada
-	Private cAliasTemp	:= getNextAlias() //Private como depência da função indexRot
+	Local cCodCliCh		:= ""
+	Local cLojCliCh		:= ""		
+	Local cChvEmpres	:= iif(SM0->M0_CODIGO == "20","30","20")//Empresa não logada
+	Private cAliTemp	:= getNextAlias() //Private como depência da função indexRot
 	
 	if pergunte(cPerg,.T.)
 
@@ -43,24 +44,24 @@ Controller principal da função.
 		
 			(cAliTemp)->(dbgotop())
 			while (cAliTemp)->(!(eof()))
-			
-				cCnpjCli := (cAliTemp)->A1_CGC
-				
+				incProc("Atualizando Cliente: "+(cAliTemp)->A1_COD+" | "+(cAliTemp)->A1_NOME)
+				cCodCliCh := (cAliTemp)->A1_COD
+				cLojCliCh := (cAliTemp)->A1_LOJA
 				//Parâmetros para a empresa logada
-				aPar := {"","",cCnpjCli}
+				aPar := {"","",cCodCliCh,cLojCliCh}
 				aDadoAtual := ExecBlock ("FSFAT002",.F.,.F.,aPar)//Recupero os dados da Empresa logada
 				
 				//Parâmetros para a outra empresa 
-				aPar := {cCodEmpPr,"01",cCnpjCli}
+				aPar := {cChvEmpres,"01",cCodCliCh,cLojCliCh}
 				aDadoOutr := ExecBlock ("FSFAT002",.F.,.F.,aPar) //Recupero os dados da outra empresa
 				
-				grvDados(cCnpjCli,aDadoAtual,aDadoOutr)
+				grvDados(cCodCliCh,cLojCliCh,aDadoAtual,aDadoOutr)
 				
 				(cAliTemp)->(dbskip())
 			enddo
 		
 		else
-			help('',1,"FSFAT002","Defina os parâmetros corretamente",1,0)//Disparo help se der problema com os parâmetros
+			help('',1,"FSFAT002","","Defina os parâmetros corretamente",1,0)//Disparo help se der problema com os parâmetros
 		endif
 		lRet := msgyesno("Deseja processar novamente?","[FSFAT004]")
 	endif
@@ -72,7 +73,7 @@ Controller principal da função.
 	
 return lRet
 
-Static Function grvDados(cCnpjCli,aDadoAtual,aDadoOutr)
+Static Function grvDados(cChvCod,cChvLoj,aDadoAtual,aDadoOutr)
 /*/{Protheus.doc} grvDados
 Função que grava as informações na tabela.
 Camada de persitência de dados
@@ -90,7 +91,6 @@ Camada de persitência de dados
 	Local nMaiCompr		:= 0 //Maior compra
 	Local nNumComprs	:= 0 //Número de compras do cliente
 	Local nVacumPed		:= 0 //Valor acumulado dos pedidos
-	Local cCnpjCli		:= 	"" //Cnpj Do cliente
 	
 	//Variáveis de controle financeiro
 	Local nMsaldCli		:= 0 //Maior saldo do cliente
@@ -103,19 +103,19 @@ Camada de persitência de dados
 	Local nSldDplC		:= 0 //Saldo das duplicatas em aberto do cliente
 	Local nNroPgAt		:= 0 //Número de pagamentos feitos em atraso
 	
-	SA1->(dbsetorder(3))//Busco pelo cnpj
-	if SA1->(dbseek(xFilial("SA1")+cCnpjCli))
+	SA1->(dbsetorder(1))
+	if SA1->(dbseek(xFilial("SA1")+cChvCod+cChvLoj))
 	
 		//Ajusto os valores de cadastro de cliente
 		dPrimCompr 	:= retPrimCpr(aDadoAtual[1],aDadoOutr[1])//Verifico qual a menor data
 		dUltCompr 	:= retUltCpr(aDadoAtual[14],aDadoOutr[14])//última compra
-		nMaiCompr 	:= iif(aDadoAtual[2] > aDadoOutr[2],aDadoAtual[2],aDadoOutr[2])//Verifico a maior compra
+		nMaiCompr 	:= retMaiVnd(aDadoAtual[2],aDadoOutr[2])//Verifico a maior compra
 		nNumComprs 	:= aDadoAtual[3]+aDadoOutr[3] //Somo o número de compras
 		nVacumPed 	:= aDadoAtual[4]+aDadoOutr[4]//Somo os valores acumulados
 	
 		//Ajusto os valores do financeiro - Também é cadastro mas conceitualmente separado
-		nMsaldCli	:= aDadoAtual[5]+aDadoOutr[5]//Somo o valor - O maior saldo devedor é a soma do maior das duas empresas
-		nMedAtrCl	:= (aDadoAtual[6]+aDadoOutr[6])/2//Somo e divido por 2 para obter a média das duas empresas
+		nMsaldCli	:= iif(SA1->A1_MSALDO > aDadoAtual[5]+aDadoOutr[5],SA1->A1_MSALDO,aDadoAtual[5]+aDadoOutr[5])//Comparo a soma com o que está gravado pra pegar o maior
+		nMedAtrCl	:= retMedAtr(aDadoAtual[6],aDadoOutr[6])//(aDadoAtual[6]+aDadoOutr[6])/2//Somo e divido por 2 para obter a média das duas empresas
 	 	nSldTitCl	:= aDadoAtual[7]+aDadoOutr[7]//O saldo em aberto é a soma dos dois 
 	 	nNroPgCli	:= aDadoAtual[8]+aDadoOutr[8]//O número de pagamentos é a soma das duas empresas
 		nVlAtrCli	:= aDadoAtual[9]+aDadoOutr[9]//Valor em atraso é a soma das duas empresas 
@@ -125,7 +125,7 @@ Camada de persitência de dados
 		nNroPgAt	:= aDadoAtual[13]+aDadoOutr[13]//Somo o valor dos pagamentos em atraso
 		
 		//Gravo os dados na tabela SA1
-		if reckLock("SA1",.F.)
+		if recLock("SA1",.F.)
 			//Relativo ao processo de faturamento
 			SA1->A1_PRICOM 	:= dPrimCompr
 			SA1->A1_ULTCOM 	:= dUltCompr
@@ -167,8 +167,8 @@ Static Function recDadosCli(cCliDe,cCliAte)
 	Local lRet		:= .T.
 	
 	//Recupero o Cnpj do cliente na base logada - Não filtro filial pois o cadastro é compartilhado
-	cQuery := "	SELECT A1_CGC FROM "+RetSqlName("SA1")+" SA1 "
-	cQuery += "		WHERE A1 COD BETWEEN '"+cCliDe+"' AND '"+cCliAte+"' "
+	cQuery := "	SELECT A1_COD,A1_LOJA,A1_NOME FROM "+RetSqlName("SA1")+" SA1 "
+	cQuery += "		WHERE A1_COD BETWEEN '"+cCliDe+"' AND '"+cCliAte+"' "
 	cQuery += "		AND SA1.D_E_L_E_T_ = '' "
 	cQuery += "		ORDER BY A1_COD, A1_LOJA "
 	
@@ -179,8 +179,8 @@ Static Function recDadosCli(cCliDe,cCliAte)
 	
 	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
 	
-	nReg := (cAliTemp)->(reccount()) //Armazeno a quantidade de registros recuperada
-	 
+	count to nReg //Armazeno a quantidade de registros recuperada
+	procRegua(nReg) 
 	//Testo para dar o retorno
 	if nReg <= 0
 		lRet := .F.
@@ -247,6 +247,54 @@ Foi concebida pois deve ser testada se as datas estão preenchidas
 	endif
 	
 return dDatRet
+
+Static Function retMedAtr(nMed1,nMed2)
+/*/{Protheus.doc} retMedAtr
+Retorna a média de atraso de pagamentos com base no cálculo das duas empresas
+@author Fabio Branis
+@since 21/12/2014
+@version 1.0
+@param nMed1, float, Média da empresa 1
+@param nMed2, float, Média da empresa 2
+@return nRet, Média Calculada
+/*/
+	Local nRet	:= 0
+	
+	do case
+	case nMed1 <> 0 .and. nMed2 <> 0
+		nRet := (nMed1 + nMed2) / 2
+	case nMed1 <> 0 .and. nMed2 == 0
+		nRet := nMed1
+	case nMed1 == 0 .and. nMed2 <> 0
+		nRet := nMed2
+	endcase
+	
+return nRet
+
+Static Function retMaiVnd(nVend1,nVend2)
+/*/{Protheus.doc} retMaiVnd
+Função que retorna a maior venda do histórico
+@author Fabio Branis
+@since 21/12/2014
+@version 1.0
+@param nVend1, float, Maior venda a ser comparada da empresa 1
+@param nVend2, float, Maior venda a ser comparada da empresa 2
+@return nRet, Maior venda
+/*/
+	Local nRet := 0
+	
+	if nVend1 > nVend2
+		nRet := nVend1
+	else
+		nRet := nVend2
+	endif
+	
+	if SA1->A1_MCOMPRA > nRet
+		nRet := SA1->A1_MCOMPRA
+	endif
+	
+return nRet
+
 Static Function ajustaSx1(cPerg)
 /*/{Protheus.doc} ajustaSx1
 Função para gravar os dados no arquivo de perguntas da função
