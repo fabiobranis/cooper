@@ -2,51 +2,206 @@
 /*/{Protheus.doc} FSFAT003
 Rotina de análise de crédito.
 Permite avaliar o crédito do cliente a partir do grupo ecnômico e liberar o crédito
-Executado do MATA410 - Ações relacionadas - Ou seja, posicionado no pedido
 @author Fabio Branis
 @since 18/12/2014
 @version 1.0
 /*/
 User Function FSFAT003()
 	
-	Local lProc		:= .T. //Controle de processamento
-	Local cNumPed	:= "" //Cnpj do cliente a avaliar o crédito
+	Local aHeadBrw		:= {}
+	Local aDadTrb		:= {}
+	Private cCadastro	:= OemToAnsi("Libera Crd Pedido")
+	Private aRotina		:= {{"Pesquisar"	,"U_MBrowPesq"	,0,1},;
+		{"Liberar"		,"U_FAT003LB",0,2}}
+	MsgRun("Criando estrutura e carregando dados no arquivo temporário...",,{|| aDadTrb := retDadBr()} )
+	aHeadBrw := montHead()
+	SC5->(dbsetorder(1))
+				
+	dbSelectArea("TRB")
+	dbSetOrder(1)
+	mBrowse(6,8,22,71,"TRB",aHeadBrw)
 	
-	//Autoloader
-	while lProc
-		lProc := indexRot() //indexRot é o root da aplicação - Controler principal
-	enddo
-	
+	//Fecha a área
+	TRB->(dbCloseArea())
+	//Apaga o arquivo fisicamente
+	FErase( aDadTrb[1] + GetDbExtension())
+	//Apaga os arquivos de índices fisicamente
+	FErase( aDadTrb[2] + OrdBagExt())
+	FErase( aDadTrb[3] + OrdBagExt())
+	FErase( aDadTrb[4] + OrdBagExt())
+
+
 Return
 
-Static Function indexRot(cNumPed)
-/*/{Protheus.doc} indexRot
-Controller principal da rotina
-@author Fabio
+Static Function retDadBr()
+/*/{Protheus.doc} retDadBr
+Recupera os dados do mBrowse e monta o TRB
+@author Fabio Branis
+@since 23/12/2014
+@version 1.0
+@return aRet, Array com os dados do TRB
+/*/	
+	Local aStruct 	:= {}
+	
+	Local cArqTRB 	:= ""
+	Local cInd1 	:= ""
+	Local cInd2 	:= ""
+	Local cInd3		:= ""
+	Local cQuery	:= ""
+
+	aadd( aStruct, { "C5_NUM"  , "C", 6, 0 } )
+	aadd( aStruct, { "C5_CLIENTE"  , "C", 6, 0 } )
+	aadd( aStruct, { "C5_LOJACLI", "C",2, 0 } )
+	aadd( aStruct, { "C5_EMISSAO", "D",8, 0 } )
+	
+	// Criar fisicamente o arquivo.
+	cArqTRB := CriaTrab( aStruct, .T. )
+	cInd1 := Left( cArqTRB, 7 ) + "1"
+	cInd2 := Left( cArqTRB, 7 ) + "2"
+	cInd3 := Left( cArqTRB, 7 ) + "3"
+	
+	// Acessar o arquivo e coloca-lo na lista de arquivos abertos.
+	dbUseArea( .T., __LocalDriver, cArqTRB, "TRB", .F., .F. )
+	// Criar os índices.
+	IndRegua( "TRB", cInd1, "C5_NUM", , , "Criando índices (Pedido)...")
+	IndRegua( "TRB", cInd2, "C5_CLIENTE+C5_LOJACLI", , , "Criando índices (Cliente + Loja)...")
+	IndRegua( "TRB", cInd3, "C5_EMISSAO", , , "Criando índices (Emissão)...")
+	
+	// Libera os índices.
+	dbClearIndex()
+	// Agrega a lista dos índices da tabela (arquivo).
+	dbSetIndex( cInd1 + OrdBagExt() )
+	dbSetIndex( cInd2 + OrdBagExt() )
+	dbSetIndex( cInd3 + OrdBagExt() )
+	
+	cQuery := "	 SELECT DISTINCT C5_NUM, C5_EMISSAO, C5_CLIENTE, C5_LOJACLI FROM "+retSqlName("SC5")+" SC5 "
+	cQuery += "		INNER JOIN "+retSqlName("SC9")+" SC9 "
+	cQuery += "			ON C9_PEDIDO  = C5_NUM "
+	cQuery += "				AND C9_CLIENTE = C5_CLIENTE "
+	cQuery += "				AND C9_LOJA = C5_LOJACLI "
+	cQuery += "				AND C9_FILIAL = C5_FILIAL "
+	cQuery += "				AND C9_BLCRED <> '' "
+	cQuery += "				AND SC9.D_E_L_E_T_ = '' "
+	cQuery += "	WHERE SC5.D_E_L_E_T_ = '' "
+	cQuery += "		AND C5_FILIAL = '"+xFilial("SC5")+"' "
+	cQuery += "		AND C5_NOTA = '' "
+	cQuery += "		AND C5_BLQ = '' "
+	
+	if select("QRY") <> 0
+		QRY->(dbclosearea())
+	endif
+	
+	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),"QRY",.F.,.T.) //Executo a query
+	
+	QRY->(dbgotop())
+	while QRY->(!(eof()))
+		if recLock("TRB",.T.)
+			TRB->C5_NUM		:= QRY->C5_NUM
+			TRB->C5_CLIENTE := QRY->C5_CLIENTE
+			TRB->C5_LOJACLI	:= QRY->C5_LOJACLI
+			TRB->C5_EMISSAO	:= stod(QRY->C5_EMISSAO)
+			msUnlock("TRB")
+		endif
+		QRY->(dbskip())
+	enddo
+	
+	
+Return({cArqTRB,cInd1,cInd2,cInd3})
+
+User Function MBrowPesq()
+/*/{Protheus.doc} MBrowPesq
+Função para pesquisar as informações da mBrowse
+@author Fabio Branis
+@since 23/12/2014
+@version 1.0
+/*/
+	local oDlgPesq, oOrdem, oChave, oBtOk, oBtCan, oBtPar
+	Local cOrdem
+	Local cChave := Space(255)
+	Local aOrdens := {}
+	Local nOrdem := 1
+	Local nOpcao := 0
+	
+	AAdd( aOrdens, "Pedido" )
+	AAdd( aOrdens, "Cliente+Loja" )
+	AAdd( aOrdens, "Emissão" )
+	
+	DEFINE MSDIALOG oDlgPesq TITLE "Pesquisa" FROM 00,00 TO 100,500 PIXEL
+	@ 005, 005 COMBOBOX oOrdem VAR cOrdem ITEMS aOrdens SIZE 210,08 PIXEL OF oDlgPesq ON CHANGE nOrdem := oOrdem:nAt
+	@ 020, 005 MSGET oChave VAR cChave SIZE 210,08 OF oDlgPesq PIXEL
+	DEFINE SBUTTON oBtOk  FROM 05,218 TYPE 1 ACTION (nOpcao := 1, oDlgPesq:End()) ENABLE OF oDlgPesq PIXEL
+	DEFINE SBUTTON oBtCan FROM 20,218 TYPE 2 ACTION (nOpcao := 0, oDlgPesq:End()) ENABLE OF oDlgPesq PIXEL
+	DEFINE SBUTTON oBtPar FROM 35,218 TYPE 5 WHEN .F. OF oDlgPesq PIXEL
+	ACTIVATE MSDIALOG oDlgPesq CENTER
+	
+	If nOpcao == 1
+		cChave := AllTrim(cChave)
+		TRB->(dbSetOrder(nOrdem))
+		TRB->(dbSeek(cChave))
+	Endif
+Return
+
+Static Function montHead()
+/*/{Protheus.doc} montHead
+Função que monta o array de campos do mBrose
+@author Fabio Branis
+@since 23/12/2014
+@version 1.0
+@return aHead, Array dos campos
+/*/	
+	Local aHead	:= {}
+	
+	aadd( aHead, { "Pedido"     , {||TRB->C5_NUM} ,"C", 6 	, 0, "" } )
+	aadd( aHead, { "Cliente"    , {||TRB->C5_CLIENTE} ,"C", 6, 0, "" } )
+	aadd( aHead, { "Loja"   	, {||TRB->C5_LOJACLI} ,"C", 2, 0, "" } )
+	aadd( aHead, { "Emissão"	, {||TRB->C5_EMISSAO} ,"D", 8, 0, "" } )
+
+return aHead
+
+User Function FAT003LB(cNumPed)
+/*/{Protheus.doc} FAT003LB
+Rotina de Liberação de Pedidos, funciona como controler da rotina.
+@author Fabio Branis
 @since 18/12/2014
 @version 1.0
 @param ${param}, ${param_type}, ${param_descr}
 @return lRet, Status de processamento - Retorna se deve continuar processando
 /*/	
-	Local lRet		:= .F.
 	Local aCabecPed	:= {} //Dados de cabeçalho
 	Local aDadosCli	:= {} //Array com os dados do cliente
 	Local aDadoCons	:= {} //Dados dos pedidos consignados
 	Local aDadoGrpE	:= {} //Dados do grupo econômico -
 	Local aDadoFina	:= {} //Dados financeiros do cliente
-	Local cCnpjCli	:= posicione("SA1",1,xFilial("SA1")+SC5->C5_CLIENTE+SC5->C5_LOJACLI,"A1_CGC")
+	Local cCnpjCli	:= ""
 	Local nVlTotPed	:= 0
+	SC5->(dbseek(xFilial("SC5")+TRB->C5_NUM+TRB->C5_LOJACLI))
+	cCnpjCli	:= posicione("SA1",1,xFilial("SA1")+SC5->C5_CLIENTE+SC5->C5_LOJACLI,"A1_CGC")
 	
-	nVlTotPed	:= retTotPed(SC5->C5_NUM) 
+	
+	nVlTotPed	:= retTotPed(SC5->C5_NUM)
 	aDadosCli 	:= retDadosCl(SC5->C5_CLIENTE, SC5->C5_LOJACLI)
 	aDadoGrpE 	:= retDadoGrpE(SC5->C5_CLIENTE, SC5->C5_LOJACLI)
 	aDadoCons 	:= retDadoCon(cCnpjCli)
 	
-	if interfAprv(aDadosCli,aDadoGrpE,aDadoCons,nVlTotPed)//Interface com o usuário
-		processAprv()//Processamento
+	if len(aDadoGrpE) == 0
+		alert("O cliente "+SC5->C5_CLIENTE+" não está cadastrado em nenhum grupo ecnoômico!")
+		return .F.
 	endif
 	
-return lRet
+	if interfAprv(aDadosCli,aDadoGrpE,aDadoCons,nVlTotPed)//Interface com o usuário
+		if processApr()//Processamento
+			msginfo("Crédito Liberado","Pedido Liberado!")
+			recLock("TRB",.F.)
+			TRB->(dbdelete())
+			msUnlock("TRB")
+			TRB->(dbgotop())
+		else
+			msginfo("Crédito Não Liberado","Pedido Não Liberado!")
+		endif
+		
+	endif
+
+return
 
 Static Function interfAprv(aDadosCli,aDadoGrpE,aDadoCons,nVlTotPed)
 /*/{Protheus.doc} interfAprv
@@ -98,7 +253,7 @@ Interface com o cliente, camada de apresentação de dados View
 	Local nVlrAtr	:= aDadosCli[10]
 
 	Private oDlgAprv, oPnlSup, oPnlCli, oPnlPedm, oPnlGrp, oPnlDado, oBtnOk, oBtnCanc
-	Private oSayNomCli, oGetNomGli, oSayGrEcon, oGetGrpEcon, oSayVlrPed, oGetVlrPed //Painel Superior 
+	Private oSayNomCli, oGetNomGli, oSayGrEcon, oGetGrpEcon, oSayVlrPed, oGetVlrPed //Painel Superior
 	Private oSayCreCl, oGetCreCli, oSayDupC, oGetDupC, oSaySldCr, oGetSldCr, oSaySalPe, oGetSalPe, oSayVncL, oGetVncL //Dados do cliente
 	Private oSayCreGr, oGetCreGr, oSaySldDpG, oGetSldDpG, oSaySldLmG,oGetSldLmG, oSaySldPed, oGetSldPed //Dados do grupo
 	Private oSayNaoFat, oGetNaoFat, oSayCompen, oGetCompen, oSaySldCo, oGetSldCo //Pedidos Consignados
@@ -159,12 +314,66 @@ Interface com o cliente, camada de apresentação de dados View
 	oGetVlrAtr	:= TGet():New(42,55,{|u|iif(pcount()>0,nVlrAtr:= u,nVlrAtr)},oPnlDado,60,009,"@E 9,999,999,999.99",{||},,,,,,.T.,,,{||},,,{||},.T.,.F.,,"nVlrAtr",,,,.F.,.T.,.F.,,,)
 	
 	oBtnOk 		:=  TButton():New(250,180,"Liberar",oDlgAprv,{||lRet := .T.,oDlgAprv:end()},30,15,,,,.T.,,,,{||},,)
-	oBtnCanc 	:=  TButton():New(250,230,"Cancelar",oDlgAprv,{||lRet := .F.,oDlgAprv:end()},30,15,,,,.T.,,,,{||},,)  
+	oBtnCanc 	:=  TButton():New(250,230,"Cancelar",oDlgAprv,{||lRet := .F.,oDlgAprv:end()},30,15,,,,.T.,,,,{||},,)
 	
 	oDlgAprv:Activate(,,,.T.)
 	
 return lRet
 
+Static Function processApr()
+/*/{Protheus.doc} processApr
+Função de que realiza a chamada da função que aprova o crédito do pedido de venda
+@author Fabio Branis
+@since 21/12/2014
+@version 1.0
+@return lRet, Validação se o pedido foi arpovado
+/*/
+
+	Local lRet		:= .T.
+	Local aAreaSC5	:= SC5->(getArea())
+	Local aAreaSC6	:= SC6->(getArea())
+	Local aAreaSC9	:= SC9->(getArea())
+	Local aArea		:= getArea()
+	Local aPeds		:= {}
+	
+	aadd(aPeds,SC5->C5_NUM)
+	
+	SC6->(dbgotop())
+	SC6->(dbsetorder(1))
+	if SC6->(dbseek(xFilial("SC6")+SC5->C5_NUM))
+		while SC6->(!(eof())) .and. SC6->C6_NUM == SC5->C5_NUM
+			//Libero o crédito pelo padrão
+			//maLibDoFat(SC6->(recno()),SC6->C6_QTDVEN,.F.,.F.,.T.,.F.,.F.,.F.)
+			//a450Grava(1,.T.,.T.)
+			
+			
+			SC9->(dbsetorder(1))
+			if SC9->(dbseek(xFilial("SC9")+SC6->C6_NUM+SC6->C6_ITEM))
+				a450Grava(1,.T.,.F.,.T.)
+				if !(empty(SC9->C9_BLCRED)) //Não liberou
+					aviso("Não liberado!", "Produto - "+SC6->C6_PRODUTO+" não liberado!",{"Ok"})
+					lRet := .F.
+				endif
+			else
+				lRet := .F. //Se não tem SC9 é porque algo está errado e não liberou
+			endif
+				
+			SC6->(dbskip())
+		enddo
+	endif
+	
+	//Libera o pedido no cabeçalho
+/*	if lRet
+		maLiberOk(aPeds)//Marco o campo C5_LIBEROK
+	endif*/
+	
+	//Retorno as tabelas para o estado original
+	restArea(aAreaSC5)
+	restArea(aAreaSC6)
+	restArea(aAreaSC9)
+	restArea(aArea)
+	
+return lRet
 Static Function retDadosCl(cCodCli,cLojCli)
 /*/{Protheus.doc} retDadosCl
 Função que retorna um array com os dados do cliente
@@ -191,6 +400,8 @@ Estrutura do array:
 	Local nSldCre	:= 0
 	Local aArea		:= getArea()
 	Local aAreaSA1	:= SA1->(getArea())
+	Local dVencCre	:= ctod("")
+	Local nValPeds	:= 0
 	
 	//Busco os registros que precisam ser processados
 	SA1->(dbsetorder(1))
@@ -201,17 +412,20 @@ Estrutura do array:
 		if SZ1->(dbseek(xFilial("SZ1")+cCodCli+cLojCli))
 		
 			//Teste de controle de crédito - 1=Grupo 2=Individual
-			if SA1->A1_ANGRU == "1"
+			
 				//Controla por grupo
-				SZ0->(dbsetorder(1))
-				if SZ0->(dbseek(xFilial("SZ0")+SZ1->Z1_CODGRP))
+			SZ0->(dbsetorder(1))
+			if SZ0->(dbseek(xFilial("SZ0")+SZ1->Z1_CODGRP))
+				if SA1->A1_ANGRU == "1"
 					nCreGrp := SZ0->Z0_VALOR
+				else
+						//Controle individual
+					nCreGrp := SZ1->Z1_VALOR
 				endif
-			else
-				//Controle individual
-				nCreGrp := SZ1->Z1_VALOR
+				dVencCre	:= SZ0->Z0_VALIDAD
 			endif
 		endif
+		nValPeds	:= retValPed(cCodCli,cLojCli)
 		nSldCre := nCreGrp - SA1->A1_SALDUPM //Obtendo o saldo do crédito do cliente
 		nTitProt := retNumProt(SA1->A1_CGC)//Obtendo o número de títulos protestados
 		
@@ -221,8 +435,8 @@ Estrutura do array:
 		aadd(aRet,nCreGrp)
 		aadd(aRet,SA1->A1_SALDUPM)
 		aadd(aRet,nSldCre)
-		aadd(aRet,SA1->A1_VACUM)
-		aadd(aRet,SA1->A1_VENCLC) //Vencimento do crédito - Pego da SA1
+		aadd(aRet,nValPeds)
+		aadd(aRet,dVencCre) //Vencimento do crédito 
 		aadd(aRet,nTitProt)//Número de títulos protestatos
 		aadd(aRet,SA1->A1_MATR) //Maior atraso de título A1_ATR
 		aadd(aRet,SA1->A1_ATR) //Valor atrasado
@@ -234,6 +448,55 @@ Estrutura do array:
 	
 return aRet
 //início das dependências da função retDadosCl
+
+Static Function retValPed(cCliCod,cLojaCod)
+/*/{Protheus.doc} retValPed
+Função que retorna a soma de todos os pedidos do cliente
+@author Fabio Branis
+@since 23/12/2014
+@version 1.0
+@param cCliCod, String, Código do cliente
+@param cLojaCod, String,Loja
+@return nRet, Valor dos pedidos
+/*/
+	Local nRet		:= 0
+	Local cQuery	:= ""
+	Local cAliTemp	:= getNextAlias()
+		
+	//Query para a cooper - Não filtro filial - Empresa chumbada
+	cQuery := "	SELECT SUM(C6_PRCVEN*C6_QTDVEN) AS VALOR_PED FROM SC6200 SC6 "
+	cQuery += " WHERE SC6.D_E_L_E_T_ = '' "
+	cQuery += "		AND C6_CLI = '"+cCliCod+"' "
+	cQuery += "		AND C6_LOJA = '"+cLojaCod+"' "
+	
+	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
+	
+	(cAliTemp)->(dbgotop())//Posiciono no primeiro registro
+	nRet := (cAliTemp)->VALOR_PED //Vendas da cooper
+	
+	//Fecho porque vou usar de novo
+	if select(cAliTemp) <> 0
+		(cAliTemp)->(dbclosearea())
+	endif
+	
+	//Query para a Horizon - Não filtro filial - Empresa chumbada
+	cQuery := "	SELECT SUM(C6_PRCVEN*C6_QTDVEN) AS VALOR_PED FROM SC6300 SC6 "
+	cQuery += " WHERE SC6.D_E_L_E_T_ = '' "
+	cQuery += "		AND C6_CLI = '"+cCliCod+"' "
+	cQuery += "		AND C6_LOJA = '"+cLojaCod+"' "
+	
+	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
+	
+	(cAliTemp)->(dbgotop())//Posiciono no primeiro registro
+	nRet += (cAliTemp)->VALOR_PED //Vendas da cooper
+	
+	//Fecho porque vou usar de novo
+	if select(cAliTemp) <> 0
+		(cAliTemp)->(dbclosearea())
+	endif	
+	
+return nRet
+
 Static Function retNumProt(cCnpjCli)
 /*/{Protheus.doc} retNumProt
 Função que retorna o número de protestos do clientes
@@ -255,7 +518,7 @@ Função que retorna o número de protestos do clientes
 	cQuery += "	AND SA1.D_E_L_E_T_ = '' "
 	cQuery += " WHERE SE1.D_E_L_E_T_ = '' "
 	cQuery += " AND E1_TIPO = 'NF' "
-	cQuery += " AND E1_SITUACA = 'F' "	
+	cQuery += " AND E1_SITUACA = 'F' "
 	
 	//Verifico a área
 	if select(cAliTemp) <> 0
@@ -280,7 +543,7 @@ Função que retorna o número de protestos do clientes
 	cQuery += "	AND SA1.D_E_L_E_T_ = '' "
 	cQuery += " WHERE SE1.D_E_L_E_T_ = '' "
 	cQuery += " AND E1_TIPO = 'NF' "
-	cQuery += " AND E1_SITUACA = 'F' "	
+	cQuery += " AND E1_SITUACA = 'F' "
 	
 	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
 	
@@ -394,7 +657,7 @@ Depêndencia da função retDadoGrpE
 	cQuery := "	SELECT SUM(C6_PRCVEN*C6_QTDVEN) AS VALOR_PED FROM SC6200 SC6 "
 	cQuery += " INNER JOIN SZ1200 SZ1 "
 	cQuery += "		ON Z1_CODCLI = C6_CLI "
-	cQuery += "			AND Z1_LOJCLI = C6_LOJA " 
+	cQuery += "			AND Z1_LOJCLI = C6_LOJA "
 	cQuery += "			AND Z1_CODGRP = '"+cCodGrpEc+"' "
 	cQuery += "			AND SZ1.D_E_L_E_T_ = '' "
 	cQuery += "	INNER JOIN SA1200 SA1 "
@@ -405,9 +668,9 @@ Depêndencia da função retDadoGrpE
 	cQuery += "		ON C5_CLIENTE = A1_COD "
 	cQuery += "			AND C5_LOJACLI = A1_LOJA "
 	cQuery += "			AND C5_NUM = C6_NUM "
-	cQuery += "			AND C5_LIBEROK = '' "
-	cQuery += "			AND C5_NOTA = '' "
-	cQuery += "			AND C5_BLQ = '' "
+	//cQuery += "			AND C5_LIBEROK = '' "
+	//cQuery += "			AND C5_NOTA = '' "
+	//cQuery += "			AND C5_BLQ = '' "
 	cQuery += "			AND SC5.D_E_L_E_T_ = '' "
 	cQuery += " WHERE SC6.D_E_L_E_T_ = '' "
 	
@@ -464,9 +727,9 @@ Depêndencia da função retDadoGrpE
 	cQuery += "		ON C5_CLIENTE = A1_COD "
 	cQuery += "			AND C5_LOJACLI = A1_LOJA "
 	cQuery += "			AND C5_NUM = C6_NUM "
-	cQuery += "			AND C5_LIBEROK = '' "
-	cQuery += "			AND C5_NOTA = '' "
-	cQuery += "			AND C5_BLQ = '' "
+	//cQuery += "			AND C5_LIBEROK = '' "
+	//cQuery += "			AND C5_NOTA = '' "
+	//cQuery += "			AND C5_BLQ = '' "
 	cQuery += "			AND SC5.D_E_L_E_T_ = '' "
 	cQuery += " WHERE SC6.D_E_L_E_T_ = '' "
 	
@@ -534,17 +797,17 @@ Para os casos de pedidos consignados.
 	cQuery += " 	INNER JOIN SA1200 SA1 "
 	cQuery += "			ON A1_COD = E1_CLIENTE "
 	cQuery += "			AND A1_LOJA = E1_LOJA "
-    cQuery += "    		AND A1_CGC = '"+cCnpjCli+"' "
+	cQuery += "    		AND A1_CGC = '"+cCnpjCli+"' "
 	cQuery += "			AND SA1.D_E_L_E_T_ = '' "
 	cQuery += "		WHERE SE1.D_E_L_E_T_ = '' "
-    cQuery += "			AND E1_TIPO = 'NCC' "
+	cQuery += "			AND E1_TIPO = 'NCC' "
     
     //Verifico a disponibilidade da tabela
-    if select(cAliTemp) <> 0
+	if select(cAliTemp) <> 0
 		(cAliTemp)->(dbclosearea())
 	endif
     
-    dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
+	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
 	
 	(cAliTemp)->(dbgotop())//Posiciono no primeiro registro
 	nRet += (cAliTemp)->SALDO_NCC //NCC da cooper
@@ -559,12 +822,12 @@ Para os casos de pedidos consignados.
 	cQuery += " 	INNER JOIN SA1300 SA1 "
 	cQuery += "			ON A1_COD = E1_CLIENTE "
 	cQuery += "			AND A1_LOJA = E1_LOJA "
-    cQuery += "    		AND A1_CGC = '"+cCnpjCli+"' "
+	cQuery += "    		AND A1_CGC = '"+cCnpjCli+"' "
 	cQuery += "			AND SA1.D_E_L_E_T_ = '' "
 	cQuery += "		WHERE SE1.D_E_L_E_T_ = '' "
-    cQuery += "			AND E1_TIPO = 'NCC' "
+	cQuery += "			AND E1_TIPO = 'NCC' "
                          
-    dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
+	dbusearea(.T.,"TOPCONN",tcgenqry(,,cQuery),cAliTemp,.F.,.T.) //Executo a query
 	
 	(cAliTemp)->(dbgotop())//Posiciono no primeiro registro
 	nRet += (cAliTemp)->SALDO_NCC //NCC da horizon
@@ -592,10 +855,10 @@ Estrutura do array
 	Local cQuery	:= ""
 	Local cAliTemp	:= getNextAlias()
 	Local nValNotFa	:= 0
-	Local nValTotPe	:= 0	
+	Local nValTotPe	:= 0
 	
 	//Cooper
-	cQuery := " SELECT " 
+	cQuery := " SELECT "
 	cQuery += " 		SUM( CASE WHEN C5_LIBEROK = '' AND C5_NOTA = ''	AND C5_BLQ = '' THEN C6_PRCVEN*C6_QTDVEN END) AS VAL_NOT_FAT,
 	cQuery += "			SUM (C6_PRCVEN*C6_QTDVEN) AS VAL_TOT_PED "
 	cQuery += "	FROM SC6200 SC6, SC5200 SC5, SA1200 SA1 "
@@ -603,8 +866,8 @@ Estrutura do array
 	cQuery += "		AND C5_NUM = C6_NUM "
 	cQuery += "		AND C5_FILIAL = C6_FILIAL "
 	cQuery += "		AND C5_CLIENTE = C6_CLI "
-	cQuery += "		AND C5_LOJACLI = C6_LOJA " 
-	cQuery += "		AND C6_TPCOM = '2' " //2 No caso será consignado
+	cQuery += "		AND C5_LOJACLI = C6_LOJA "
+	cQuery += "		AND C5_TPCOM = '2' " //2 No caso será consignado
 	cQuery += " 	AND A1_COD = C5_CLIENTE "
 	cQuery += " 	AND A1_LOJA = C5_LOJACLI "
 	cQuery += " 	AND A1_CGC = '"+cCnpjCli+"' "
@@ -628,7 +891,7 @@ Estrutura do array
 	endif
 	
 	//Horizon
-	cQuery := " SELECT " 
+	cQuery := " SELECT "
 	cQuery += " 		SUM( CASE WHEN C5_LIBEROK = '' AND C5_NOTA = ''	AND C5_BLQ = '' THEN C6_PRCVEN*C6_QTDVEN END) AS VAL_NOT_FAT,
 	cQuery += "			SUM (C6_PRCVEN*C6_QTDVEN) AS VAL_TOT_PED "
 	cQuery += "	FROM SC6300 SC6, SC5300 SC5, SA1300 SA1 "
@@ -636,8 +899,8 @@ Estrutura do array
 	cQuery += "		AND C5_NUM = C6_NUM "
 	cQuery += "		AND C5_FILIAL = C6_FILIAL "
 	cQuery += "		AND C5_CLIENTE = C6_CLI "
-	cQuery += "		AND C5_LOJACLI = C6_LOJA " 
-	cQuery += "		AND C6_TPCOM = '2' " //2 No caso será consignado
+	cQuery += "		AND C5_LOJACLI = C6_LOJA "
+	cQuery += "		AND C5_TPCOM = '2' " //2 No caso será consignado
 	cQuery += " 	AND A1_COD = C5_CLIENTE "
 	cQuery += " 	AND A1_LOJA = C5_LOJACLI "
 	cQuery += " 	AND A1_CGC = '"+cCnpjCli+"' "
