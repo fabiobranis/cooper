@@ -276,10 +276,13 @@ User Function FSFIN001(aBoletos)
 	
 Return Nil                   
 
-//------------------------------------------------------------------------------------
-// Inverte marcacao
-//------------------------------------------------------------------------------------
 Static Function lMarcacao()
+/*/{Protheus.doc} lMarcacao
+Função que inverte a marcação da tela de seleção de títulos
+@author Fabio Branis
+@since 08/01/2015
+@version 1.0
+/*/
 	For nX:= 1 To Len(aTitulos)
 		aTitulos[nX][1] := lMarcar
 	Next
@@ -306,7 +309,8 @@ Também persiste os dados das tabelas SEA e SEE referentes ao boleto e borderô
 	Local nRec      := 0
 	Local _nVlrAbat 	:= 0
 	Local aBitmap   	:= {"" ,"\Bitmaps\Logo_Siga.bmp"}  //Logo da empresa                 
-	Local aBMP		:= aBitMap                  
+	Local aBMP		:= aBitMap   
+	Local cVariaca		:= ""               
 	Private aDadosEmp	:= {SM0->M0_NOMECOM                                                      	,; //Nome da Empresa
 	                       AllTrim(SM0->M0_ENDCOB)                                          		,; //Endereço
 	                       AllTrim(SM0->M0_BAIRCOB)+", "+AllTrim(SM0->M0_CIDCOB)+", "+SM0->M0_ESTCOB 	,; //Complemento
@@ -398,7 +402,7 @@ Também persiste os dados das tabelas SEA e SEE referentes ao boleto e borderô
                        Iif(SA6->A6_COD=="479",StrZero(Val(AllTrim(SA6->A6_AGENCIA)),7),SubStr(StrZero(Val(AllTrim(SA6->A6_AGENCIA)),4),1,4)+If(Empty(SA6->A6_DVAGE),"","-"+SA6->A6_DVAGE)),;   //Agência
                        Iif(SA6->A6_COD=="479",AllTrim(SEE->EE_CODEMP),AllTrim(SA6->A6_NUMCON)),;   //Conta Corrente
                        Iif(SA6->A6_COD=="479","",If(Empty(SA6->A6_DVCTA),"",SA6->A6_DVCTA))  ,;               //Dígito da conta corrente
-                       AllTrim(SEE->EE_CARTEIR)+Iif(!Empty(AllTrim(SEE->EE_VARIACA)),"-"+SEE->EE_VARIACA,"") }                //Carteira
+                       AllTrim(SEE->EE_CARTEIR)+Iif(!Empty(AllTrim(cVariaca)),"-"+cVariaca,"") }                //Carteira
 
       aDatSacado   := {AllTrim(SA1->A1_NOME)+" - "+cCpfCnpj             ,;      //Razão Social 
                        AllTrim(SA1->A1_COD )                            ,;      //Código
@@ -525,10 +529,10 @@ Também persiste os dados das tabelas SEA e SEE referentes ao boleto e borderô
 	      aAdd( aBolText , cJuros )
 	  Endif
 	  //Mensagem para protesto
-	  If Alltrim(SEE->EE_DIASPRO) <> "00" .And. !Empty(SEE->EE_DIASPRO)
+/*	  If Alltrim(SEE->EE_DIASPRO) <> "00" .And. !Empty(SEE->EE_DIASPRO)
 		  cProstesto := "Título sujeito a Protesto após "+SEE->EE_DIASPRO+" dias de vencimento."
 		  aAdd( aBolText , cProstesto )
-	  EndIf
+	  EndIf*/
       //Outras Mensagens de instrucao
       aAdd( aBolText , SEE->EE_MSG1 ) //Instrucao 1
       aAdd( aBolText , SEE->EE_MSG2 ) //Instrucao 2
@@ -1259,29 +1263,99 @@ Função que alimenta o grupo de perguntas da rotina
 @author Fabio
 @since 10/01/2015
 @version 1.0
-//*/	
-	PutSx1(cPerg,"01","Do Prefixo:"				,"","","mv_ch1" ,"C",03,0,0,"G","",""		,"","","mv_par01",""  				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"02","Ate o Prefixo:"			,"","","mv_ch2" ,"C",03,0,0,"G","",""		,"","","mv_par02",""  				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"03","Do Titulo:"				,"","","mv_ch3" ,"C",07,0,0,"G","",""		,"","","mv_par03",""				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"04","Ate o Titulo:"			,"","","mv_ch4" ,"C",07,0,0,"G","",""		,"","","mv_par04",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"05","Da Parcela:"				,"","","mv_ch5" ,"C",02,0,0,"G","",""		,"","","mv_par05",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"06","Ate a Parcela:"			,"","","mv_ch6" ,"C",02,0,0,"G","",""		,"","","mv_par06",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"07","Do Banco:"				,"","","mv_ch7" ,"C",03,0,0,"G","","SA6"	,"","","mv_par07",""   				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"08","Agencia:"				,"","","mv_ch8" ,"C",05,0,0,"G","",""		,"","","mv_par08",""   				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"09","Conta:"					,"","","mv_ch9" ,"C",10,0,0,"G","",""		,"","","mv_par09",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"10","SubConta:" 				,"","","mv_ch10","C",03,0,0,"G","",""		,"","","mv_par10",""  				,"","","","" 			,"","","","","","","","","","","")
-	PutSx1(cPerg,"11","Do Cliente:"				,"","","mv_ch11","C",06,0,0,"G","","SA1"	,"","","mv_par11",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"12","Ate o Cliente:"			,"","","mv_ch12","C",06,0,0,"G","","SA1"	,"","","mv_par12",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"13","Da Loja:"				,"","","mv_ch13","C",02,0,0,"G","",""		,"","","mv_par13",""   				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"14","Ate a Loja:"				,"","","mv_ch14","C",02,0,0,"G","",""		,"","","mv_par14",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"15","Da Dt. Venc.:"			,"","","mv_ch15","D",08,0,0,"G","",""		,"","","mv_par15",""  				,"","","",""  			,"","","","","","","","","","","")
-	PutSx1(cPerg,"16","Ate a Dt. Venc:"			,"","","mv_ch16","D",08,0,0,"G","",""		,"","","mv_par16",""  				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"17","Da Dt. Emissao:"			,"","","mv_ch17","D",08,0,0,"G","",""		,"","","mv_par17",""   				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"18","Ate a Dt. Emis:"			,"","","mv_ch18","D",08,0,0,"G","",""		,"","","mv_par18",""   				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"19","Do bordero:"				,"","","mv_ch19","C",06,0,0,"G","",""		,"","","mv_par19",""				,"","","",""   			,"","","","","","","","","","","")
-	PutSx1(cPerg,"20","Ate o Bordero:"			,"","","mv_ch20","C",06,0,0,"G","",""		,"","","mv_par20",""				,"","","",""			,"","","","","","","","","","","")
-	PutSx1(cPerg,"21","Selecionar titulos:"		,"","","mv_ch21","N",01,0,0,"C","",""		,"","","mv_par21","Sim"				,"","","","Não"			,"","","","","","","","","","","")
-	PutSx1(cPerg,"22","Gerar Bordero:"			,"","","mv_ch22","N",01,0,0,"C","",""		,"","","mv_par22","Sim"				,"","","","Não"			,"","","","","","","","","","","")
+/*/	
+	Local aTam		:= {}
+	Local aHelpPor	:= {}
+	
+	aadd(aHelpPor,"Defina a faixa de prefixos a considerar")
+	aadd(aHelpPor,"na rotina")
+	aTam :=tamSx3("E1_PREFIXO")
+	PutSx1(cPerg,"01","Do Prefixo:"				,"","","mv_ch1" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par01",""  				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"02","Ate o Prefixo:"			,"","","mv_ch2" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par02",""  				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+	
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a faixa de títulos a considerar")
+	aadd(aHelpPor,"na rotina")
+	aTam :=tamSx3("E1_NUM")
+	PutSx1(cPerg,"03","Do Titulo:"				,"","","mv_ch3" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par03",""				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"04","Ate o Titulo:"			,"","","mv_ch4" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par04",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a faixa de parcelas a considerar")
+	aadd(aHelpPor,"na rotina")
+	aTam :=tamSx3("E1_PARCELA")
+	PutSx1(cPerg,"05","Da Parcela:"				,"","","mv_ch5" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par05",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"06","Ate a Parcela:"			,"","","mv_ch6" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par06",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	
+	aHelpPor := {}
+	aadd(aHelpPor,"Escolha o código do banco")
+	aTam :=tamSx3("EE_CODIGO")
+	PutSx1(cPerg,"07","Do Banco:"				,"","","mv_ch7" ,"C",aTam[1],0,0,"G","","SA6"	,"","","mv_par07",""   				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	
+	aHelpPor := {}
+	aadd(aHelpPor,"Escolha a agência")
+	aTam :=tamSx3("EE_AGENCIA")
+	PutSx1(cPerg,"08","Agencia:"				,"","","mv_ch8" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par08",""   				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	
+	aHelpPor := {}
+	aadd(aHelpPor,"Escolha a conta")
+	aTam :=tamSx3("EE_CONTA")
+	PutSx1(cPerg,"09","Conta:"					,"","","mv_ch9" ,"C",aTam[1],0,0,"G","",""		,"","","mv_par09",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	
+	aHelpPor := {}
+	aadd(aHelpPor,"Escolha a subconta onde os parâmetros")
+	aadd(aHelpPor,"para impressão de boletos estejam")
+	aadd(aHelpPor,"configurados")
+	aTam :=tamSx3("EE_SUBCTA")
+	PutSx1(cPerg,"10","SubConta:" 				,"","","mv_ch10","C",aTam[1],0,0,"G","",""		,"","","mv_par10",""  				,"","","","" 			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a faixa de clientes")
+	aadd(aHelpPor,"para a rotina")
+	aTam :=tamSx3("A1_COD")
+	PutSx1(cPerg,"11","Do Cliente:"				,"","","mv_ch11","C",aTam[1],0,0,"G","","SA1"	,"","","mv_par11",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"12","Ate o Cliente:"			,"","","mv_ch12","C",aTam[1],0,0,"G","","SA1"	,"","","mv_par12",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a faixa de loja de clientes")
+	aadd(aHelpPor,"para a rotina")
+	aTam :=tamSx3("A1_LOJA")
+	PutSx1(cPerg,"13","Da Loja:"				,"","","mv_ch13","C",aTam[1],0,0,"G","",""		,"","","mv_par13",""   				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"14","Ate a Loja:"				,"","","mv_ch14","C",aTam[1],0,0,"G","",""		,"","","mv_par14",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a abrangência de vencimento")
+	aadd(aHelpPor,"para a rotina")
+	aTam :=tamSx3("E1_VENCTO")
+	PutSx1(cPerg,"15","Da Dt. Venc.:"			,"","","mv_ch15","D",aTam[1],0,0,"G","",""		,"","","mv_par15",""  				,"","","",""  			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"16","Ate a Dt. Venc:"			,"","","mv_ch16","D",aTam[1],0,0,"G","",""		,"","","mv_par16",""  				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a abrangência de emissão")
+	aadd(aHelpPor,"para a rotina")
+	aTam :=tamSx3("E1_VENCTO")
+	PutSx1(cPerg,"17","Da Dt. Emissao:"			,"","","mv_ch17","D",aTam[1],0,0,"G","",""		,"","","mv_par17",""   				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"18","Ate a Dt. Emis:"			,"","","mv_ch18","D",aTam[1],0,0,"G","",""		,"","","mv_par18",""   				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Defina a faixa de borderôs de títulos")
+	aadd(aHelpPor,"para a rotina, caso haja borderôs")
+	aTam :=tamSx3("E1_NUMBOR")
+	PutSx1(cPerg,"19","Do bordero:"				,"","","mv_ch19","C",aTam[1],0,0,"G","",""		,"","","mv_par19",""				,"","","",""   			,"","","","","","","","","","","",aHelpPor)
+	PutSx1(cPerg,"20","Ate o Bordero:"			,"","","mv_ch20","C",aTam[1],0,0,"G","",""		,"","","mv_par20",""				,"","","",""			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Selecione sim se você quer um browse")
+	aadd(aHelpPor,"para selecionar títulos específicos")
+	aadd(aHelpPor,"filtrados nos parâmetroa dessa rotina")
+	PutSx1(cPerg,"21","Selecionar titulos:"		,"","","mv_ch21","N",01,0,0,"C","",""		,"","","mv_par21","Sim"				,"","","","Não"			,"","","","","","","","","","","",aHelpPor)
+
+	aHelpPor := {}
+	aadd(aHelpPor,"Selecione sim se você deseja que")
+	aadd(aHelpPor,"o borderô seja gerao pela rotina")
+	aadd(aHelpPor,"Será baseada na numeração do MV_NUMBORR")
+	PutSx1(cPerg,"22","Gerar Bordero:"			,"","","mv_ch22","N",01,0,0,"C","",""		,"","","mv_par22","Sim"				,"","","","Não"			,"","","","","","","","","","","",aHelpPor)
+
 Return
 
 Static Function VerParam(mensagem)
